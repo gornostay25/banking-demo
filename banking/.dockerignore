@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go test files
+*_test.go
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Build artifacts
+main
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Development tools
+.air.toml
+Makefile
+docker-compose.yml
+Dockerfile.migration
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendor (if using vendor directory)
+vendor/
+
+# Other
+*.templ.go
