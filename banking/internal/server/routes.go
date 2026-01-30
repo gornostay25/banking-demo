@@ -5,10 +5,13 @@ import (
 	"net/http"
 
 	"banking/internal/services"
+	"banking/internal/validators"
 
 	jwt "github.com/appleboy/gin-jwt/v3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -16,8 +19,14 @@ import (
 func (s *Server) RegisterRoutes() http.Handler {
 	r := gin.Default()
 
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		if err := validators.RegisterCustomValidators(v); err != nil {
+			log.Fatal("Failed to register custom validators: " + err.Error())
+		}
+	}
+
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // Add your frontend URL
+		AllowOrigins:     []string{"http://localhost:3000"}, // Add your frontend URL
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders:     []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true, // Enable cookies/auth
@@ -77,12 +86,13 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 // loginHandler godoc
 // @Summary Login
-// @Description Authenticate user and get JWT token
+// @Description Authenticate user and get JWT token. Returns authentication tokens as HTTP-only cookies: `token` and `refresh_token`.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param credentials body services.LoginRequest true "Login credentials"
-// @Success 200 {object} services.LoginResponse
+// @Success 200 {object} services.TokenPairResponse
+// @header 200 {string} Set-Cookie "Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... and refresh_token=NGDcrC2V..."
 // @Failure 401 {object} services.ErrorResponse
 // @Router /api/auth/login [post]
 func (s *Server) loginHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerFunc {
@@ -91,11 +101,13 @@ func (s *Server) loginHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerF
 
 // refreshHandler godoc
 // @Summary Refresh token
-// @Description Refresh JWT token
+// @Description Refresh JWT access token using refresh token. Returns new access token and refresh token. Also sets HTTP-only cookies: `token` and `refresh_token`.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Success 200 {object} services.LoginResponse
+// @Param refresh_token body services.RefreshRequest true "Refresh token request"
+// @Success 200 {object} services.TokenPairResponse
+// @header 200 {string} Set-Cookie "Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... and refresh_token=Jk1WWhw-eo6NWpDH5w3p4ky69gjrCZeuRfG5_2rFsvE="
 // @Failure 401 {object} services.ErrorResponse
 // @Router /api/auth/refresh [post]
 // @Security BearerAuth

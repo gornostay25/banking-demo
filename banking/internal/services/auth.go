@@ -2,7 +2,9 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"banking/internal/database"
@@ -29,21 +31,22 @@ func NewAuthService(db database.Service) *AuthService {
 	}
 }
 
-// LoginRequest represents a login request
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email" example:"user1@test.com"`
 	Password string `json:"password" binding:"required" example:"password"`
 }
 
-// UserResponse represents user information in API responses
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required" example:"DcwAT..."`
+}
+
 type UserResponse struct {
 	ID        string    `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Email     string    `json:"email" example:"user1@test.com"`
 	CreatedAt time.Time `json:"created_at" example:"2026-01-30T12:00:00Z"`
 }
 
-// LoginResponse represents a successful login response
-type LoginResponse struct {
+type TokenPairResponse struct {
 	Code    int    `json:"code" example:"200"`
 	Expire  string `json:"expire" example:"2026-01-31T12:00:00Z"`
 	Token   string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
@@ -61,7 +64,6 @@ type LoginResponse struct {
 // @Router /api/auth/me [get]
 // @Security BearerAuth
 func (s *AuthService) MeHandler(c *gin.Context) {
-	// User is guaranteed to be authenticated by middleware
 	user := utils.MustGetUserFromContext(c)
 
 	response := UserResponse{
@@ -75,20 +77,37 @@ func (s *AuthService) MeHandler(c *gin.Context) {
 
 // Middleware
 func (s *AuthService) JWTInitParams() *jwt.GinJWTMiddleware {
-	return &jwt.GinJWTMiddleware{
-		Realm:       "test zone",
-		Key:         []byte("secret key"),
-		Timeout:     time.Hour,
-		MaxRefresh:  time.Hour,
-		IdentityKey: utils.IdentityKey,
-		PayloadFunc: s.createPayloadFunc(),
+	jwtSecret := os.Getenv("JWT_SECRET_KEY")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET_KEY environment variable is required")
+	}
 
+	return &jwt.GinJWTMiddleware{
+		Realm:      "test",
+		Key:        []byte(jwtSecret),
+		Timeout:    time.Hour,
+		MaxRefresh: time.Hour,
+
+		// Add 60 seconds leeway for clock skew tolerance
+		ParseOptions: []gojwt.ParserOption{
+			gojwt.WithLeeway(60 * time.Second),
+		},
+
+		IdentityKey: utils.IdentityKey,
+
+		RefreshTokenCookieName: "refresh_token",
+		CookieName:             "token",
+		SendCookie:             true,
+		CookieHTTPOnly:         true,
+		CookieMaxAge:           time.Hour * 24,
+
+		PayloadFunc:     s.createPayloadFunc(),
 		IdentityHandler: s.createIdentityHandler(),
 		Authenticator:   s.createAuthenticator(),
 		Authorizer:      s.createAuthorizator(),
 		Unauthorized:    s.createUnauthorized(),
 		LogoutResponse:  s.createLogoutResponse(),
-		TokenLookup:     "header: Authorization",
+		TokenLookup:     "header: Authorization, cookie: token",
 		TokenHeadName:   "Bearer",
 		TimeFunc:        time.Now,
 	}
@@ -137,7 +156,7 @@ func (s *AuthService) createAuthenticator() func(c *gin.Context) (any, error) {
 	return func(c *gin.Context) (any, error) {
 		var loginVals LoginRequest
 		if err := c.ShouldBindJSON(&loginVals); err != nil {
-			return nil, jwt.ErrMissingLoginValues
+			return nil, fmt.Errorf("invalid login data: %s", utils.FormatValidationErrors(err))
 		}
 
 		ctx := c.Request.Context()
@@ -149,7 +168,6 @@ func (s *AuthService) createAuthenticator() func(c *gin.Context) (any, error) {
 			return nil, fmt.Errorf("database error: %w", err)
 		}
 
-		// Check password
 		if !utils.CheckPasswordHash(loginVals.Password, user.PasswordHash) {
 			return nil, jwt.ErrFailedAuthentication
 		}
@@ -174,11 +192,7 @@ func (s *AuthService) createUnauthorized() func(c *gin.Context, code int, messag
 		if message == "" {
 			message = "Unauthorized"
 		}
-		// Use ErrorResponse for consistency (defined in account.go, same package)
-		c.JSON(code, ErrorResponse{
-			Code:    code,
-			Message: message,
-		})
+		utils.RespondWithError(c, code, message, nil)
 		c.Abort()
 	}
 }

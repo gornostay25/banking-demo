@@ -2,16 +2,14 @@ package repositories
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"time"
 
 	"banking/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/uptrace/bun"
 )
-
-var ErrTransactionNotFound = errors.New("transaction not found")
 
 type TransactionRepository struct {
 	db *bun.DB
@@ -21,41 +19,58 @@ func NewTransactionRepository(db *bun.DB) *TransactionRepository {
 	return &TransactionRepository{db: db}
 }
 
-// GetByID retrieves a transaction by ID
-func (r *TransactionRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Transaction, error) {
-	transaction := new(models.Transaction)
-	err := r.db.NewSelect().
-		Model(transaction).
-		Where("id = ?", id).
-		Scan(ctx)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrTransactionNotFound
-		}
-		return nil, err
-	}
-	return transaction, nil
+type UserTransactionDetail struct {
+	Transaction *models.Transaction
+	Amount      string // decimal.Decimal as string
+	Currency    models.Currency
+	Direction   string // "send" or "receive"
 }
 
-// GetByUserID retrieves transactions for a user with pagination and filters
-func (r *TransactionRepository) GetByUserID(ctx context.Context, userID uuid.UUID, transactionType *models.TransactionType, page, limit int) ([]*models.Transaction, int, error) {
-	var transactions []*models.Transaction
+func (r *TransactionRepository) GetUserTransactionDetails(ctx context.Context, userID uuid.UUID, transactionType *models.TransactionType, page, limit int) ([]UserTransactionDetail, int, error) {
+	type result struct {
+		TransactionID uuid.UUID              `bun:"transaction_id"`
+		UserID        uuid.UUID              `bun:"user_id"`
+		Type          models.TransactionType `bun:"type"`
+		CreatedAt     time.Time              `bun:"created_at"`
+		Amount        decimal.Decimal        `bun:"amount"`
+		Currency      models.Currency        `bun:"currency"`
+	}
+
+	var results []result
 
 	query := r.db.NewSelect().
-		Model(&transactions).
-		Where("user_id = ?", userID)
+		TableExpr("transactions t").
+		ColumnExpr("t.id AS transaction_id").
+		ColumnExpr("t.user_id").
+		ColumnExpr("t.type").
+		ColumnExpr("t.created_at").
+		ColumnExpr("l.amount").
+		ColumnExpr("l.currency").
+		Join("JOIN ledger l ON l.transaction_id = t.id").
+		Join("JOIN accounts a ON a.id = l.account_id").
+		Where("a.user_id = ?", userID)
 
 	if transactionType != nil {
-		query = query.Where("type = ?", *transactionType)
+		query = query.Where("t.type = ?", *transactionType)
 	}
 
 	// Get total count
-	count, err := query.Count(ctx)
+	countQuery := r.db.NewSelect().
+		TableExpr("ledger l").
+		Join("JOIN transactions t ON l.transaction_id = t.id").
+		Join("JOIN accounts a ON a.id = l.account_id").
+		Where("a.user_id = ?", userID)
+
+	if transactionType != nil {
+		countQuery = countQuery.Where("t.type = ?", *transactionType)
+	}
+
+	count, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// pagination
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -65,10 +80,32 @@ func (r *TransactionRepository) GetByUserID(ctx context.Context, userID uuid.UUI
 	}
 
 	// Order by created_at descending
-	err = query.Order("created_at DESC").Scan(ctx)
+	err = query.Order("t.created_at DESC").Scan(ctx, &results)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return transactions, count, nil
+	details := make([]UserTransactionDetail, 0, len(results))
+	for _, res := range results {
+		direction := "receive"
+		amount := res.Amount
+		if amount.IsNegative() {
+			direction = "send"
+			amount = amount.Neg() // Make positive for display
+		}
+
+		details = append(details, UserTransactionDetail{
+			Transaction: &models.Transaction{
+				ID:        res.TransactionID,
+				UserID:    res.UserID,
+				Type:      res.Type,
+				CreatedAt: res.CreatedAt,
+			},
+			Amount:    amount.String(),
+			Currency:  res.Currency,
+			Direction: direction,
+		})
+	}
+
+	return details, count, nil
 }

@@ -121,7 +121,7 @@ const docTemplate = `{
         },
         "/api/auth/login": {
             "post": {
-                "description": "Authenticate user and get JWT token",
+                "description": "Authenticate user and get JWT token. Returns authentication tokens as HTTP-only cookies: ` + "`" + `token` + "`" + ` and ` + "`" + `refresh_token` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -147,7 +147,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.LoginResponse"
+                            "$ref": "#/definitions/services.TokenPairResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... and refresh_token=NGDcrC2V..."
+                            }
                         }
                     },
                     "401": {
@@ -229,7 +235,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Refresh JWT token",
+                "description": "Refresh JWT access token using refresh token. Returns new access token and refresh token. Also sets HTTP-only cookies: ` + "`" + `token` + "`" + ` and ` + "`" + `refresh_token` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -240,11 +246,28 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh token",
+                "parameters": [
+                    {
+                        "description": "Refresh token request",
+                        "name": "refresh_token",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.RefreshRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.LoginResponse"
+                            "$ref": "#/definitions/services.TokenPairResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... and refresh_token=Jk1WWhw-eo6NWpDH5w3p4ky69gjrCZeuRfG5_2rFsvE="
+                            }
                         }
                     },
                     "401": {
@@ -630,7 +653,19 @@ const docTemplate = `{
                 }
             }
         },
-        "services.LoginResponse": {
+        "services.RefreshRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "DcwAT..."
+                }
+            }
+        },
+        "services.TokenPairResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -677,9 +712,34 @@ const docTemplate = `{
         "services.TransactionResponse": {
             "type": "object",
             "properties": {
+                "amount": {
+                    "type": "string",
+                    "example": "100.50"
+                },
                 "created_at": {
                     "type": "string",
                     "example": "2026-01-30T12:00:00Z"
+                },
+                "currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "direction": {
+                    "description": "\"send\" for outgoing, \"receive\" for incoming",
+                    "type": "string",
+                    "enum": [
+                        "send",
+                        "receive"
+                    ],
+                    "example": "send"
                 },
                 "id": {
                     "type": "string",

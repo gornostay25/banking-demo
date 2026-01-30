@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/uptrace/bun"
 )
 
 type AccountService struct {
@@ -34,12 +37,11 @@ type AccountBalanceResponse struct {
 	Balance  string          `json:"balance" example:"1000.00"`
 }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Code    int    `json:"code" example:"400"`
-	Message string `json:"message" example:"Bad request"`
-	Error   string `json:"error,omitempty" example:"Invalid input"`
+type AccountBalanceURI struct {
+	ID string `uri:"id" binding:"required,uuid"`
 }
+
+type ErrorResponse = utils.ErrorResponse
 
 func NewAccountService(db database.Service) *AccountService {
 	accountRepo := repositories.NewAccountRepository(db.DB())
@@ -67,11 +69,7 @@ func (s *AccountService) ListAccountsHandler(c *gin.Context) {
 	ctx := c.Request.Context()
 	accounts, err := s.accountRepo.GetByUserID(ctx, user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "Failed to retrieve accounts",
-			Error:   err.Error(),
-		})
+		utils.RespondWithInternalError(c, "Failed to retrieve accounts", err)
 		return
 	}
 
@@ -108,13 +106,15 @@ func (s *AccountService) GetAccountBalanceHandler(c *gin.Context) {
 	// User is guaranteed to be authenticated by middleware
 	user := utils.MustGetUserFromContext(c)
 
-	accountIDStr := c.Param("id")
-	accountID, err := uuid.Parse(accountIDStr)
+	var uri AccountBalanceURI
+	if err := c.ShouldBindUri(&uri); err != nil {
+		utils.RespondWithBadRequest(c, "Invalid request parameters", utils.FormatValidationErrors(err))
+		return
+	}
+
+	accountID, err := uuid.Parse(uri.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Code:    http.StatusBadRequest,
-			Message: "Invalid account ID format",
-		})
+		utils.RespondWithBadRequest(c, "Invalid account ID format", err)
 		return
 	}
 
@@ -122,17 +122,10 @@ func (s *AccountService) GetAccountBalanceHandler(c *gin.Context) {
 	account, err := s.accountRepo.GetByIDAndUserID(ctx, accountID, user.ID)
 	if err != nil {
 		if err == repositories.ErrAccountNotFound {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Code:    http.StatusNotFound,
-				Message: "Account not found or does not belong to user",
-			})
+			utils.RespondWithNotFound(c, "Account not found or does not belong to user")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "Failed to retrieve account",
-			Error:   err.Error(),
-		})
+		utils.RespondWithInternalError(c, "Failed to retrieve account", err)
 		return
 	}
 
@@ -143,4 +136,32 @@ func (s *AccountService) GetAccountBalanceHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func lockAccountsForUpdate(ctx context.Context, tx bun.Tx, accountRepo *repositories.AccountRepository, account1ID, account2ID uuid.UUID) (*models.Account, *models.Account, error) {
+	var first, second *models.Account
+	var err error
+
+	// Lock accounts in consistent order (by ID) to prevent deadlocks
+	if account1ID.String() < account2ID.String() {
+		first, err = accountRepo.GetByIDForUpdate(ctx, tx, account1ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock first account: %w", err)
+		}
+		second, err = accountRepo.GetByIDForUpdate(ctx, tx, account2ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock second account: %w", err)
+		}
+	} else {
+		second, err = accountRepo.GetByIDForUpdate(ctx, tx, account2ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock second account: %w", err)
+		}
+		first, err = accountRepo.GetByIDForUpdate(ctx, tx, account1ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock first account: %w", err)
+		}
+	}
+
+	return first, second, nil
 }

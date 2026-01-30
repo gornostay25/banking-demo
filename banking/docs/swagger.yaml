@@ -103,7 +103,15 @@ definitions:
     - email
     - password
     type: object
-  services.LoginResponse:
+  services.RefreshRequest:
+    properties:
+      refresh_token:
+        example: DcwAT...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  services.TokenPairResponse:
     properties:
       code:
         example: 200
@@ -136,8 +144,25 @@ definitions:
     type: object
   services.TransactionResponse:
     properties:
+      amount:
+        example: "100.50"
+        type: string
       created_at:
         example: "2026-01-30T12:00:00Z"
+        type: string
+      currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: USD
+      direction:
+        description: '"send" for outgoing, "receive" for incoming'
+        enum:
+        - send
+        - receive
+        example: send
         type: string
       id:
         example: 550e8400-e29b-41d4-a716-446655440000
@@ -260,7 +285,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate user and get JWT token
+      description: 'Authenticate user and get JWT token. Returns authentication tokens
+        as HTTP-only cookies: `token` and `refresh_token`.'
       parameters:
       - description: Login credentials
         in: body
@@ -273,8 +299,13 @@ paths:
       responses:
         "200":
           description: OK
+          headers:
+            Set-Cookie:
+              description: 'Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                and refresh_token=NGDcrC2V...'
+              type: string
           schema:
-            $ref: '#/definitions/services.LoginResponse'
+            $ref: '#/definitions/services.TokenPairResponse'
         "401":
           description: Unauthorized
           schema:
@@ -325,14 +356,27 @@ paths:
     post:
       consumes:
       - application/json
-      description: Refresh JWT token
+      description: 'Refresh JWT access token using refresh token. Returns new access
+        token and refresh token. Also sets HTTP-only cookies: `token` and `refresh_token`.'
+      parameters:
+      - description: Refresh token request
+        in: body
+        name: refresh_token
+        required: true
+        schema:
+          $ref: '#/definitions/services.RefreshRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          headers:
+            Set-Cookie:
+              description: 'Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                and refresh_token=Jk1WWhw-eo6NWpDH5w3p4ky69gjrCZeuRfG5_2rFsvE='
+              type: string
           schema:
-            $ref: '#/definitions/services.LoginResponse'
+            $ref: '#/definitions/services.TokenPairResponse'
         "401":
           description: Unauthorized
           schema:

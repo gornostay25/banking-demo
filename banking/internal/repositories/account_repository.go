@@ -11,9 +11,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-var (
-	ErrAccountNotFound = errors.New("account not found")
-)
+var ErrAccountNotFound = errors.New("account not found")
 
 type AccountRepository struct {
 	db *bun.DB
@@ -23,7 +21,6 @@ func NewAccountRepository(db *bun.DB) *AccountRepository {
 	return &AccountRepository{db: db}
 }
 
-// GetByID retrieves an account by ID
 func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Account, error) {
 	account := new(models.Account)
 	err := r.db.NewSelect().
@@ -39,7 +36,22 @@ func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 	return account, nil
 }
 
-// GetByUserID retrieves all accounts for a user
+func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, tx bun.Tx, id uuid.UUID) (*models.Account, error) {
+	account := new(models.Account)
+	err := tx.NewSelect().
+		Model(account).
+		Where("id = ?", id).
+		For("UPDATE").
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrAccountNotFound
+		}
+		return nil, err
+	}
+	return account, nil
+}
+
 func (r *AccountRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Account, error) {
 	var accounts []*models.Account
 	err := r.db.NewSelect().
@@ -53,7 +65,6 @@ func (r *AccountRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	return accounts, nil
 }
 
-// GetByIDAndUserID retrieves an account by ID and verifies it belongs to the user
 func (r *AccountRepository) GetByIDAndUserID(ctx context.Context, accountID, userID uuid.UUID) (*models.Account, error) {
 	account := new(models.Account)
 	err := r.db.NewSelect().
