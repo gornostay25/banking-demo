@@ -27,17 +27,18 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	public := r.Group("/api")
 
-	// r.GET("/websocket", s.websocketHandler)
-
 	// AUTH
 	authService := services.NewAuthService(s.db)
 	authMiddleware, err := jwt.New(authService.JWTInitParams())
 	if err != nil {
 		log.Fatal("JWT Error:" + err.Error())
 	}
+
 	authGroup := public.Group("/auth")
 	{
-		authGroup.POST("/login", authService.LoginHandler)
+		authGroup.POST("/login", s.loginHandler(authMiddleware))
+		authGroup.POST("/refresh", s.refreshHandler(authMiddleware))
+		authGroup.POST("/logout", s.logoutHandler(authMiddleware))
 		authGroup.GET("/me", authMiddleware.MiddlewareFunc(), authService.MeHandler)
 	}
 
@@ -45,20 +46,20 @@ func (s *Server) RegisterRoutes() http.Handler {
 	protectedGroup.Use(authMiddleware.MiddlewareFunc())
 
 	// Account Operations
-
+	accountService := services.NewAccountService(s.db)
 	accountGroup := protectedGroup.Group("/accounts")
 	{
-		accountGroup.GET("", s.HelloWorldHandler)
-		accountGroup.GET("/:id/balance", s.GetAccountBalanceHandler)
+		accountGroup.GET("", accountService.ListAccountsHandler)
+		accountGroup.GET("/:id/balance", accountService.GetAccountBalanceHandler)
 	}
 
 	// Transaction Operations
-
+	transactionService := services.NewTransactionService(s.db)
 	transactionGroup := protectedGroup.Group("/transactions")
 	{
-		transactionGroup.POST("/transfer", s.TransferHandler)
-		transactionGroup.POST("/exchange", s.ExchangeHandler)
-		transactionGroup.GET("", s.GetTransactionsHandler)
+		transactionGroup.POST("/transfer", transactionService.TransferHandler)
+		transactionGroup.POST("/exchange", transactionService.ExchangeHandler)
+		transactionGroup.GET("", transactionService.GetTransactionsHandler)
 	}
 
 	// Swagger documentation
@@ -74,20 +75,45 @@ func (s *Server) RegisterRoutes() http.Handler {
 	return r
 }
 
-// HelloWorldHandler godoc
-// @Summary Hello World handler
-// @Description Returns a hello world message
-// @Tags accounts
+// loginHandler godoc
+// @Summary Login
+// @Description Authenticate user and get JWT token
+// @Tags auth
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]string
-// @Router /api/accounts [get]
-// @Security BearerAuth
-func (s *Server) HelloWorldHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
+// @Param credentials body services.LoginRequest true "Login credentials"
+// @Success 200 {object} services.LoginResponse
+// @Failure 401 {object} services.ErrorResponse
+// @Router /api/auth/login [post]
+func (s *Server) loginHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerFunc {
+	return authMiddleware.LoginHandler
+}
 
-	c.JSON(http.StatusOK, resp)
+// refreshHandler godoc
+// @Summary Refresh token
+// @Description Refresh JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Success 200 {object} services.LoginResponse
+// @Failure 401 {object} services.ErrorResponse
+// @Router /api/auth/refresh [post]
+// @Security BearerAuth
+func (s *Server) refreshHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerFunc {
+	return authMiddleware.RefreshHandler
+}
+
+// logoutHandler godoc
+// @Summary Logout
+// @Description Logout user
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/logout [post]
+// @Security BearerAuth
+func (s *Server) logoutHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerFunc {
+	return authMiddleware.LogoutHandler
 }
 
 // healthHandler godoc
@@ -101,94 +127,3 @@ func (s *Server) HelloWorldHandler(c *gin.Context) {
 func (s *Server) healthHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, s.db.Health())
 }
-
-// GetAccountBalanceHandler godoc
-// @Summary Get account balance
-// @Description Returns balance for a specific account
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param id path string true "Account ID"
-// @Success 200 {object} map[string]string
-// @Router /api/accounts/{id}/balance [get]
-// @Security BearerAuth
-func (s *Server) GetAccountBalanceHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
-}
-
-// TransferHandler godoc
-// @Summary Transfer money
-// @Description Transfer money between accounts
-// @Tags transactions
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Router /api/transactions/transfer [post]
-// @Security BearerAuth
-func (s *Server) TransferHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
-}
-
-// ExchangeHandler godoc
-// @Summary Exchange currency
-// @Description Exchange currency between accounts
-// @Tags transactions
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Router /api/transactions/exchange [post]
-// @Security BearerAuth
-func (s *Server) ExchangeHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
-}
-
-// GetTransactionsHandler godoc
-// @Summary Get transaction history
-// @Description Returns transaction history
-// @Tags transactions
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Router /api/transactions [get]
-// @Security BearerAuth
-func (s *Server) GetTransactionsHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
-}
-
-// func (s *Server) websocketHandler(c *gin.Context) {
-// 	w := c.Writer
-// 	r := c.Request
-// 	socket, err := websocket.Accept(w, r, nil)
-// 	if err != nil {
-// 		log.Printf("could not open websocket: %v", err)
-// 		_, _ = w.Write([]byte("could not open websocket"))
-// 		w.WriteHeader(http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	defer socket.Close(websocket.StatusGoingAway, "server closing websocket")
-
-// 	ctx := r.Context()
-// 	socketCtx := socket.CloseRead(ctx)
-
-// 	for {
-// 		payload := fmt.Sprintf("server timestamp: %d", time.Now().UnixNano())
-// 		err := socket.Write(socketCtx, websocket.MessageText, []byte(payload))
-// 		if err != nil {
-// 			break
-// 		}
-// 		time.Sleep(time.Second * 2)
-// 	}
-// }

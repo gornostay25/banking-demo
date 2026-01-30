@@ -42,7 +42,6 @@ Dockerfile.migration
 # Documentation
 README.md
 *.md
-docs/
 
 # Temporary files
 tmp/

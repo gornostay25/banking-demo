@@ -22,7 +22,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns a hello world message",
+                "description": "Returns all accounts for the authenticated user with balances",
                 "consumes": [
                     "application/json"
                 ],
@@ -32,15 +32,27 @@ const docTemplate = `{
                 "tags": [
                     "accounts"
                 ],
-                "summary": "Hello World handler",
+                "summary": "List user's accounts",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "List of user accounts",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/services.AccountResponse"
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -53,7 +65,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns balance for a specific account",
+                "description": "Returns balance for a specific account belonging to the authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -75,12 +87,33 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Account balance information",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/services.AccountBalanceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -106,7 +139,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.login"
+                            "$ref": "#/definitions/services.LoginRequest"
                         }
                     }
                 ],
@@ -114,10 +147,42 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/services.LoginResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Logout user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -145,10 +210,47 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/services.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Refresh JWT token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh token",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.LoginResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -161,7 +263,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns transaction history",
+                "description": "Returns paginated list of transactions for authenticated user with optional filters",
                 "consumes": [
                     "application/json"
                 ],
@@ -172,14 +274,52 @@ const docTemplate = `{
                     "transactions"
                 ],
                 "summary": "Get transaction history",
+                "parameters": [
+                    {
+                        "enum": [
+                            "transfer",
+                            "exchange"
+                        ],
+                        "type": "string",
+                        "description": "Transaction type filter",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Paginated list of transactions",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/services.TransactionListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -192,7 +332,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Exchange currency between accounts",
+                "description": "Exchange currency within user's accounts. Fixed exchange rate: 1 USD = 0.92 EUR. Uses double-entry ledger system.",
                 "consumes": [
                     "application/json"
                 ],
@@ -203,14 +343,46 @@ const docTemplate = `{
                     "transactions"
                 ],
                 "summary": "Exchange currency",
+                "parameters": [
+                    {
+                        "description": "Exchange request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.ExchangeRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Exchange transaction created successfully",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/services.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input or insufficient funds",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Account not found",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -223,7 +395,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Transfer money between accounts",
+                "description": "Transfer money from authenticated user's account to another user's account (same currency). Uses double-entry ledger system.",
                 "consumes": [
                     "application/json"
                 ],
@@ -233,15 +405,47 @@ const docTemplate = `{
                 "tags": [
                     "transactions"
                 ],
-                "summary": "Transfer money",
+                "summary": "Transfer money between users",
+                "parameters": [
+                    {
+                        "description": "Transfer request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.TransferRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Transaction created successfully",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/services.TransactionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input or insufficient funds",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Account not found",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/services.ErrorResponse"
                         }
                     }
                 }
@@ -273,18 +477,273 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "services.login": {
+        "models.Currency": {
+            "type": "string",
+            "enum": [
+                "USD",
+                "EUR"
+            ],
+            "x-enum-varnames": [
+                "CurrencyUSD",
+                "CurrencyEUR"
+            ]
+        },
+        "models.TransactionType": {
+            "type": "string",
+            "enum": [
+                "transfer",
+                "exchange"
+            ],
+            "x-enum-varnames": [
+                "TransactionTypeTransfer",
+                "TransactionTypeExchange"
+            ]
+        },
+        "services.AccountBalanceResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "string",
+                    "example": "1000.00"
+                },
+                "currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "services.AccountResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "string",
+                    "example": "1000.00"
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-01-30T12:00:00Z"
+                },
+                "currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2026-01-30T12:00:00Z"
+                }
+            }
+        },
+        "services.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 400
+                },
+                "error": {
+                    "type": "string",
+                    "example": "Invalid input"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Bad request"
+                }
+            }
+        },
+        "services.ExchangeRequest": {
+            "description": "Exchange currency within user's accounts",
             "type": "object",
             "required": [
-                "password",
-                "username"
+                "amount",
+                "from_currency",
+                "to_currency"
             ],
             "properties": {
-                "password": {
-                    "type": "string"
+                "amount": {
+                    "type": "string",
+                    "example": "100.00"
                 },
-                "username": {
-                    "type": "string"
+                "from_currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "to_currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "EUR"
+                }
+            }
+        },
+        "services.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user1@test.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "password"
+                }
+            }
+        },
+        "services.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 200
+                },
+                "expire": {
+                    "type": "string",
+                    "example": "2026-01-31T12:00:00Z"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "success"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "services.TransactionListResponse": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.TransactionResponse"
+                    }
+                }
+            }
+        },
+        "services.TransactionResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-01-30T12:00:00Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "type": {
+                    "enum": [
+                        "transfer",
+                        "exchange"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.TransactionType"
+                        }
+                    ],
+                    "example": "transfer"
+                }
+            }
+        },
+        "services.TransferRequest": {
+            "description": "Transfer money between user accounts",
+            "type": "object",
+            "required": [
+                "amount",
+                "currency",
+                "to_account_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "string",
+                    "example": "100.50"
+                },
+                "currency": {
+                    "enum": [
+                        "USD",
+                        "EUR"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "to_account_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "services.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-01-30T12:00:00Z"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "user1@test.com"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         }

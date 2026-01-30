@@ -46,7 +46,7 @@ Account Structure: Each user automatically has:
 
 ### Account Operations
 
-- GET /accounts - List user's accounts with (calculated balances?)
+- GET /accounts - List user's accounts with balances
 - GET /accounts/:id/balance - Get specific account balance
 
 ### Transaction Operations

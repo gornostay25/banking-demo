@@ -1,55 +1,53 @@
 package services
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
 	"banking/internal/database"
+	"banking/internal/models"
+	"banking/internal/repositories"
+	"banking/internal/utils"
 
 	jwt "github.com/appleboy/gin-jwt/v3"
 	"github.com/gin-gonic/gin"
 	gojwt "github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type AuthService struct {
-	db database.Service
+	db       database.Service
+	userRepo *repositories.UserRepository
 }
 
 func NewAuthService(db database.Service) *AuthService {
-	return &AuthService{db: db}
+	userRepo := repositories.NewUserRepository(db.DB())
+	return &AuthService{
+		db:       db,
+		userRepo: userRepo,
+	}
 }
 
-// Types
-const (
-	identityKey = "id"
-	userAdmin   = "admin"
-)
-
-type User struct {
-	UserName  string
-	FirstName string
-	LastName  string
+// LoginRequest represents a login request
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required,email" example:"user1@test.com"`
+	Password string `json:"password" binding:"required" example:"password"`
 }
 
-type login struct {
-	Username string `form:"username" json:"username" binding:"required"`
-	Password string `form:"password" json:"password" binding:"required"`
+// UserResponse represents user information in API responses
+type UserResponse struct {
+	ID        string    `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email     string    `json:"email" example:"user1@test.com"`
+	CreatedAt time.Time `json:"created_at" example:"2026-01-30T12:00:00Z"`
 }
 
-// LoginHandler godoc
-// @Summary Login
-// @Description Authenticate user and get JWT token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param credentials body login true "Login credentials"
-// @Success 200 {object} map[string]string
-// @Router /api/auth/login [post]
-func (s *AuthService) LoginHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Login test"
-
-	c.JSON(http.StatusOK, resp)
+// LoginResponse represents a successful login response
+type LoginResponse struct {
+	Code    int    `json:"code" example:"200"`
+	Expire  string `json:"expire" example:"2026-01-31T12:00:00Z"`
+	Token   string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	Message string `json:"message" example:"success"`
 }
 
 // MeHandler godoc
@@ -58,14 +56,21 @@ func (s *AuthService) LoginHandler(c *gin.Context) {
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]string
+// @Success 200 {object} services.UserResponse
+// @Failure 401 {object} services.ErrorResponse
 // @Router /api/auth/me [get]
 // @Security BearerAuth
 func (s *AuthService) MeHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Me test"
+	// User is guaranteed to be authenticated by middleware
+	user := utils.MustGetUserFromContext(c)
 
-	c.JSON(http.StatusOK, resp)
+	response := UserResponse{
+		ID:        user.ID.String(),
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // Middleware
@@ -75,98 +80,126 @@ func (s *AuthService) JWTInitParams() *jwt.GinJWTMiddleware {
 		Key:         []byte("secret key"),
 		Timeout:     time.Hour,
 		MaxRefresh:  time.Hour,
-		IdentityKey: "identityKey",
-		PayloadFunc: payloadFunc(),
+		IdentityKey: utils.IdentityKey,
+		PayloadFunc: s.createPayloadFunc(),
 
-		IdentityHandler: identityHandler(),
-		Authenticator:   authenticator(),
-		Authorizer:      authorizator(),
-		Unauthorized:    unauthorized(),
-		LogoutResponse:  logoutResponse(),
-		TokenLookup:     "header: Authorization, query: token, cookie: jwt",
-		// TokenLookup: "query:token",
-		// TokenLookup: "cookie:token",
-		TokenHeadName: "Bearer",
-		TimeFunc:      time.Now,
+		IdentityHandler: s.createIdentityHandler(),
+		Authenticator:   s.createAuthenticator(),
+		Authorizer:      s.createAuthorizator(),
+		Unauthorized:    s.createUnauthorized(),
+		LogoutResponse:  s.createLogoutResponse(),
+		TokenLookup:     "header: Authorization",
+		TokenHeadName:   "Bearer",
+		TimeFunc:        time.Now,
 	}
 }
 
-func payloadFunc() func(data any) gojwt.MapClaims {
+func (s *AuthService) createPayloadFunc() func(data any) gojwt.MapClaims {
 	return func(data any) gojwt.MapClaims {
-		if v, ok := data.(*User); ok {
+		if v, ok := data.(*models.User); ok {
 			return gojwt.MapClaims{
-				identityKey: v.UserName,
+				utils.IdentityKey: v.ID.String(),
 			}
 		}
 		return gojwt.MapClaims{}
 	}
 }
 
-func identityHandler() func(c *gin.Context) any {
+func (s *AuthService) createIdentityHandler() func(c *gin.Context) any {
 	return func(c *gin.Context) any {
 		claims := jwt.ExtractClaims(c)
-		return &User{
-			UserName: claims[identityKey].(string),
+		if len(claims) == 0 {
+			return nil
 		}
+
+		userIDStr, ok := claims[utils.IdentityKey].(string)
+		if !ok || userIDStr == "" {
+			return nil
+		}
+
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			return nil
+		}
+
+		ctx := c.Request.Context()
+		user, err := s.userRepo.GetByID(ctx, userID)
+		if err != nil || user == nil {
+			// trigger 401
+			return nil
+		}
+
+		return user
 	}
 }
 
-func authenticator() func(c *gin.Context) (any, error) {
+func (s *AuthService) createAuthenticator() func(c *gin.Context) (any, error) {
 	return func(c *gin.Context) (any, error) {
-		var loginVals login
-		if err := c.ShouldBind(&loginVals); err != nil {
-			return "", jwt.ErrMissingLoginValues
+		var loginVals LoginRequest
+		if err := c.ShouldBindJSON(&loginVals); err != nil {
+			return nil, jwt.ErrMissingLoginValues
 		}
-		userID := loginVals.Username
-		password := loginVals.Password
 
-		if (userID == userAdmin && password == userAdmin) ||
-			(userID == "test" && password == "test") {
-			return &User{
-				UserName:  userID,
-				LastName:  "Bo-Yi",
-				FirstName: "Wu",
-			}, nil
+		ctx := c.Request.Context()
+		user, err := s.userRepo.GetByEmail(ctx, loginVals.Email)
+		if err != nil {
+			if err == repositories.ErrUserNotFound {
+				return nil, jwt.ErrFailedAuthentication
+			}
+			return nil, fmt.Errorf("database error: %w", err)
 		}
-		return nil, jwt.ErrFailedAuthentication
+
+		// Check password
+		if !utils.CheckPasswordHash(loginVals.Password, user.PasswordHash) {
+			return nil, jwt.ErrFailedAuthentication
+		}
+
+		return user, nil
 	}
 }
 
-func authorizator() func(c *gin.Context, data any) bool {
+func (s *AuthService) createAuthorizator() func(c *gin.Context, data any) bool {
 	return func(c *gin.Context, data any) bool {
-		if v, ok := data.(*User); ok && v.UserName == "admin" {
-			return true
-		}
-		return false
+		// We dont have roles
+		return true
 	}
 }
 
-func unauthorized() func(c *gin.Context, code int, message string) {
+func (s *AuthService) createUnauthorized() func(c *gin.Context, code int, message string) {
 	return func(c *gin.Context, code int, message string) {
-		c.JSON(code, gin.H{
-			"code":    code,
-			"message": message,
+		// Ensure 401 status code for unauthorized access
+		if code == 0 {
+			code = http.StatusUnauthorized
+		}
+		if message == "" {
+			message = "Unauthorized"
+		}
+		// Use ErrorResponse for consistency (defined in account.go, same package)
+		c.JSON(code, ErrorResponse{
+			Code:    code,
+			Message: message,
 		})
+		c.Abort()
 	}
 }
 
-func logoutResponse() func(c *gin.Context) {
+func (s *AuthService) createLogoutResponse() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// This demonstrates that claims are now accessible during logout
 		claims := jwt.ExtractClaims(c)
-		user, exists := c.Get(identityKey)
+		user, exists := c.Get(utils.IdentityKey)
 
 		response := gin.H{
 			"code":    http.StatusOK,
 			"message": "Successfully logged out",
 		}
 
-		// Show that we can access user information during logout
 		if len(claims) > 0 {
-			response["logged_out_user"] = claims[identityKey]
+			response["logged_out_user"] = claims[utils.IdentityKey]
 		}
 		if exists {
-			response["user_info"] = user.(*User).UserName
+			if userModel, ok := user.(*models.User); ok {
+				response["user_info"] = userModel.Email
+			}
 		}
 
 		c.JSON(http.StatusOK, response)

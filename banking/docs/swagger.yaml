@@ -1,14 +1,187 @@
 basePath: /
 definitions:
-  services.login:
+  models.Currency:
+    enum:
+    - USD
+    - EUR
+    type: string
+    x-enum-varnames:
+    - CurrencyUSD
+    - CurrencyEUR
+  models.TransactionType:
+    enum:
+    - transfer
+    - exchange
+    type: string
+    x-enum-varnames:
+    - TransactionTypeTransfer
+    - TransactionTypeExchange
+  services.AccountBalanceResponse:
     properties:
-      password:
+      balance:
+        example: "1000.00"
         type: string
-      username:
+      currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: USD
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  services.AccountResponse:
+    properties:
+      balance:
+        example: "1000.00"
+        type: string
+      created_at:
+        example: "2026-01-30T12:00:00Z"
+        type: string
+      currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: USD
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      updated_at:
+        example: "2026-01-30T12:00:00Z"
+        type: string
+    type: object
+  services.ErrorResponse:
+    properties:
+      code:
+        example: 400
+        type: integer
+      error:
+        example: Invalid input
+        type: string
+      message:
+        example: Bad request
+        type: string
+    type: object
+  services.ExchangeRequest:
+    description: Exchange currency within user's accounts
+    properties:
+      amount:
+        example: "100.00"
+        type: string
+      from_currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: USD
+      to_currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: EUR
+    required:
+    - amount
+    - from_currency
+    - to_currency
+    type: object
+  services.LoginRequest:
+    properties:
+      email:
+        example: user1@test.com
+        type: string
+      password:
+        example: password
         type: string
     required:
+    - email
     - password
-    - username
+    type: object
+  services.LoginResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      expire:
+        example: "2026-01-31T12:00:00Z"
+        type: string
+      message:
+        example: success
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  services.TransactionListResponse:
+    properties:
+      limit:
+        example: 10
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 25
+        type: integer
+      transactions:
+        items:
+          $ref: '#/definitions/services.TransactionResponse'
+        type: array
+    type: object
+  services.TransactionResponse:
+    properties:
+      created_at:
+        example: "2026-01-30T12:00:00Z"
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/models.TransactionType'
+        enum:
+        - transfer
+        - exchange
+        example: transfer
+    type: object
+  services.TransferRequest:
+    description: Transfer money between user accounts
+    properties:
+      amount:
+        example: "100.50"
+        type: string
+      currency:
+        allOf:
+        - $ref: '#/definitions/models.Currency'
+        enum:
+        - USD
+        - EUR
+        example: USD
+      to_account_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    required:
+    - amount
+    - currency
+    - to_account_id
+    type: object
+  services.UserResponse:
+    properties:
+      created_at:
+        example: "2026-01-30T12:00:00Z"
+        type: string
+      email:
+        example: user1@test.com
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
     type: object
 info:
   contact: {}
@@ -20,26 +193,35 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns a hello world message
+      description: Returns all accounts for the authenticated user with balances
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: List of user accounts
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            items:
+              $ref: '#/definitions/services.AccountResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Hello World handler
+      summary: List user's accounts
       tags:
       - accounts
   /api/accounts/{id}/balance:
     get:
       consumes:
       - application/json
-      description: Returns balance for a specific account
+      description: Returns balance for a specific account belonging to the authenticated
+        user
       parameters:
       - description: Account ID
         in: path
@@ -50,11 +232,25 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Account balance information
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.AccountBalanceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get account balance
@@ -71,17 +267,37 @@ paths:
         name: credentials
         required: true
         schema:
-          $ref: '#/definitions/services.login'
+          $ref: '#/definitions/services.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.LoginResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       summary: Login
+      tags:
+      - auth
+  /api/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Logout
       tags:
       - auth
   /api/auth/me:
@@ -95,28 +311,79 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get current user
       tags:
       - auth
-  /api/transactions:
-    get:
+  /api/auth/refresh:
+    post:
       consumes:
       - application/json
-      description: Returns transaction history
+      description: Refresh JWT token
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.LoginResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh token
+      tags:
+      - auth
+  /api/transactions:
+    get:
+      consumes:
+      - application/json
+      description: Returns paginated list of transactions for authenticated user with
+        optional filters
+      parameters:
+      - description: Transaction type filter
+        enum:
+        - transfer
+        - exchange
+        in: query
+        name: type
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of transactions
+          schema:
+            $ref: '#/definitions/services.TransactionListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get transaction history
@@ -126,16 +393,38 @@ paths:
     post:
       consumes:
       - application/json
-      description: Exchange currency between accounts
+      description: 'Exchange currency within user''s accounts. Fixed exchange rate:
+        1 USD = 0.92 EUR. Uses double-entry ledger system.'
+      parameters:
+      - description: Exchange request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.ExchangeRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Exchange transaction created successfully
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.TransactionResponse'
+        "400":
+          description: Bad request - invalid input or insufficient funds
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "404":
+          description: Account not found
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Exchange currency
@@ -145,19 +434,41 @@ paths:
     post:
       consumes:
       - application/json
-      description: Transfer money between accounts
+      description: Transfer money from authenticated user's account to another user's
+        account (same currency). Uses double-entry ledger system.
+      parameters:
+      - description: Transfer request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.TransferRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Transaction created successfully
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/services.TransactionResponse'
+        "400":
+          description: Bad request - invalid input or insufficient funds
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "404":
+          description: Account not found
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Transfer money
+      summary: Transfer money between users
       tags:
       - transactions
   /health:
