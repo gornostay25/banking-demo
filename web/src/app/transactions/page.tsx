@@ -1,18 +1,25 @@
-import { Button } from "@/components/ui/button"
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
+import * as React from "react";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -20,96 +27,107 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
+import { getTransactions, type TransactionType } from "@/lib/api/transactions";
+import {
+  capitalizeFirst,
+  formatTransactionAmount,
+  formatTransactionDate,
+} from "@/lib/utils";
 
-const transactions = [
-  {
-    id: "tx-3101",
-    date: "Jan 30, 2026",
-    type: "Transfer",
-    direction: "Send",
-    currency: "USD",
-    amount: "-240.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3102",
-    date: "Jan 30, 2026",
-    type: "Exchange",
-    direction: "Receive",
-    currency: "EUR",
-    amount: "460.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3103",
-    date: "Jan 29, 2026",
-    type: "Transfer",
-    direction: "Receive",
-    currency: "USD",
-    amount: "1,200.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3104",
-    date: "Jan 28, 2026",
-    type: "Exchange",
-    direction: "Send",
-    currency: "EUR",
-    amount: "-320.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3105",
-    date: "Jan 27, 2026",
-    type: "Transfer",
-    direction: "Send",
-    currency: "USD",
-    amount: "-85.50",
-    status: "Completed",
-  },
-  {
-    id: "tx-3106",
-    date: "Jan 27, 2026",
-    type: "Transfer",
-    direction: "Receive",
-    currency: "EUR",
-    amount: "640.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3107",
-    date: "Jan 26, 2026",
-    type: "Exchange",
-    direction: "Receive",
-    currency: "USD",
-    amount: "900.00",
-    status: "Completed",
-  },
-  {
-    id: "tx-3108",
-    date: "Jan 25, 2026",
-    type: "Transfer",
-    direction: "Send",
-    currency: "EUR",
-    amount: "-220.00",
-    status: "Completed",
-  },
-]
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 10;
 
-export default function TransactionsPage() {
+function TransactionsContent() {
+  const searchParams = useSearchParams();
+  const [highlightId, setHighlightId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(DEFAULT_PAGE);
+  const [typeFilter, setTypeFilter] = React.useState<"all" | TransactionType>(
+    "all",
+  );
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["transactions", page, DEFAULT_LIMIT, typeFilter],
+    queryFn: () =>
+      getTransactions({
+        page,
+        limit: DEFAULT_LIMIT,
+        type: typeFilter === "all" ? undefined : typeFilter,
+      }),
+  });
+
+  const total = data?.total ?? 0;
+  const transactions = data?.transactions ?? [];
+  const totalPages = Math.max(1, Math.ceil(total / DEFAULT_LIMIT));
+  const safePage = Math.min(page, totalPages);
+
+  React.useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [page, safePage]);
+
+  React.useEffect(() => {
+    const targetId = searchParams.get("highlight");
+    if (!targetId) {
+      return;
+    }
+    setHighlightId(targetId);
+    setPage(DEFAULT_PAGE);
+    setTypeFilter("all");
+  }, [searchParams]);
+
+  const pageButtons = React.useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    let start = Math.max(1, page - 2);
+    let end = Math.min(totalPages, page + 2);
+
+    if (end - start < 4) {
+      if (start === 1) {
+        end = Math.min(totalPages, start + 4);
+      } else if (end === totalPages) {
+        start = Math.max(1, end - 4);
+      }
+    }
+
+    const pages = [];
+    for (let current = start; current <= end; current += 1) {
+      pages.push(current);
+    }
+    return pages;
+  }, [page, totalPages]);
+
+  const showSkeleton = isLoading;
+  const showError = isError;
+  const errorMessage =
+    error instanceof Error ? error.message : "Failed to load transactions.";
+
+  const handleTypeChange = (value: "all" | TransactionType) => {
+    setTypeFilter(value);
+    setPage(DEFAULT_PAGE);
+  };
+
+  const skeletonRows = React.useMemo(
+    () => Array.from({ length: DEFAULT_LIMIT }, (_, index) => index),
+    [],
+  );
+
   return (
-    <div className="flex flex-1 flex-col gap-8">
-      <section className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Transaction history
-          </h1>
-          <p className="text-muted-foreground">
-            Browse all transfers and exchanges across wallets.
-          </p>
-        </div>
-          <Select defaultValue="all">
+    <ProtectedRoute>
+      <div className="flex flex-1 flex-col gap-8">
+        <section className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Transaction history
+            </h1>
+            <p className="text-muted-foreground">
+              Browse all transfers and exchanges across wallets.
+            </p>
+          </div>
+          <Select value={typeFilter} onValueChange={handleTypeChange}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
@@ -119,67 +137,150 @@ export default function TransactionsPage() {
               <SelectItem value="exchange">Exchanges</SelectItem>
             </SelectContent>
           </Select>
-      </section>
+        </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All transactions</CardTitle>
-          <CardDescription>
-            Showing 8 of 25 results for January 2026.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Direction</TableHead>
-                <TableHead>Currency</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="text-muted-foreground">
-                    {tx.date}
-                  </TableCell>
-                  <TableCell className="font-medium">{tx.type}</TableCell>
-                  <TableCell>{tx.direction}</TableCell>
-                  <TableCell>{tx.currency}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {tx.amount}
-                  </TableCell>
-                  <TableCell>{tx.status}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>All transactions</CardTitle>
+            <CardDescription>
+              {total > 0
+                ? `Showing ${transactions.length} of ${total} results.`
+                : "No transactions available yet."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="w-full overflow-x-auto">
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Direction</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {showSkeleton
+                    ? skeletonRows.map((row) => (
+                        <TableRow key={`skeleton-${row}`}>
+                          <TableCell>
+                            <Skeleton className="h-4 w-20" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-20" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-16" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-12" />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Skeleton className="ml-auto h-4 w-20" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    : null}
+                  {showError ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="text-sm text-destructive"
+                      >
+                        {errorMessage}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {!showSkeleton && !showError && transactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="text-sm text-muted-foreground"
+                      >
+                        No transactions found.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {!showSkeleton && !showError
+                    ? transactions.map((tx) => (
+                        <TableRow
+                          key={`${tx.id}-${tx.direction}`}
+                          className={
+                            highlightId === tx.id
+                              ? "bg-accent/80 ring-1 ring-accent/80"
+                              : undefined
+                          }
+                        >
+                          <TableCell className="text-muted-foreground whitespace-nowrap">
+                            {formatTransactionDate(tx.created_at)}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {capitalizeFirst(tx.type)}
+                          </TableCell>
+                          <TableCell>{capitalizeFirst(tx.direction)}</TableCell>
+                          <TableCell>{tx.currency}</TableCell>
+                          <TableCell className="text-right font-medium whitespace-nowrap">
+                            {formatTransactionAmount(
+                              tx.amount,
+                              tx.currency,
+                              tx.direction,
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    : null}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-muted-foreground text-sm">
-          Page 1 of 4 • 10 items per page
-        </p>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            Previous
-          </Button>
-          <Button size="sm">1</Button>
-          <Button variant="outline" size="sm">
-            2
-          </Button>
-          <Button variant="outline" size="sm">
-            3
-          </Button>
-          <Button variant="outline" size="sm">
-            Next
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-muted-foreground text-sm">
+            Page {safePage} of {totalPages} • {DEFAULT_LIMIT} items per page
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage <= 1 || showSkeleton}
+            >
+              Previous
+            </Button>
+            {pageButtons.map((pageNumber) => (
+              <Button
+                key={`page-${pageNumber}`}
+                size="sm"
+                variant={pageNumber === safePage ? "default" : "outline"}
+                onClick={() => setPage(pageNumber)}
+                disabled={pageNumber === safePage || showSkeleton}
+              >
+                {pageNumber}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={safePage >= totalPages || showSkeleton}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
-  )
+    </ProtectedRoute>
+  );
+}
+// Fix useSearchParams() should be wrapped in a suspense boundary at page "/transactions". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+export default function TransactionsPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <TransactionsContent />
+    </React.Suspense>
+  );
 }

@@ -15,48 +15,49 @@ run:
 
 # Up only DB container
 docker-up-db:
-	@if docker compose up -d psql_bp 2>/dev/null; then \
+	@if docker compose -f ../docker-compose.yml --env-file ../banking/.env up -d psql_bp 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose up -d psql_bp; \
+		docker-compose -f ../docker-compose.yml --env-file ../banking/.env up -d psql_bp; \
 	fi
 
 # Down only DB container
 docker-down-db:
-	@if docker compose down psql_bp 2>/dev/null; then \
+	@if docker compose -f ../docker-compose.yml --env-file ../banking/.env stop psql_bp 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose down psql_bp; \
+		docker-compose -f ../docker-compose.yml --env-file ../banking/.env stop psql_bp; \
 	fi
 
 # Up container
 docker-up:
-	@if docker compose up --build 2>/dev/null; then \
+	@if docker compose -f ../docker-compose.yml --env-file ../banking/.env up --build 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose up --build; \
+		docker-compose -f ../docker-compose.yml --env-file ../banking/.env up --build; \
 	fi
 
 # Shutdown container
 docker-down:
-	@if docker compose down 2>/dev/null; then \
+	@if docker compose -f ../docker-compose.yml --env-file ../banking/.env down 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose down; \
+		docker-compose -f ../docker-compose.yml --env-file ../banking/.env down; \
 	fi
 
-# Test the application
+# Test the application (unit tests only, skips integration tests)
 test:
-	@echo "Testing..."
+	@echo "Running unit tests (skipping integration tests)..."
 	@go test ./... -v
-# Integrations Tests for the application
-itest:
-	@echo "Running integration tests..."
-	@go test ./internal/database -v
+
+# Integration tests (requires Docker)
+test-integration:
+	@echo "Running integration tests (requires Docker)..."
+	@go test ./... -v -tags integration
 
 # Clean the binary
 clean:
@@ -90,4 +91,4 @@ migrate-up:
 		exit 1; \
 	fi
 
-.PHONY: all build run test clean watch docker-up-db docker-down-db docker-up docker-down migrate-up itest
+.PHONY: all build run test test-integration clean watch docker-up-db docker-down-db docker-up docker-down migrate-up

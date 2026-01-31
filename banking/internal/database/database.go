@@ -45,6 +45,13 @@ var (
 	dbInstance *service
 )
 
+func ResetInstance() {
+	if dbInstance != nil {
+		_ = dbInstance.Close()
+		dbInstance = nil
+	}
+}
+
 func New() Service {
 	// Reuse Connection
 	if dbInstance != nil {

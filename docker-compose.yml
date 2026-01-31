@@ -1,8 +1,8 @@
 services:
-  app:
+  banking-app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./banking
+      dockerfile: ../Dockerfile.banking
       target: prod
     restart: unless-stopped
     ports:
@@ -16,11 +16,14 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_SCHEMA: ${DB_SCHEMA}
+    env_file:
+      - ./banking/.env
     depends_on:
       psql_bp:
         condition: service_healthy
     networks:
       - blueprint
+
   psql_bp:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -28,6 +31,8 @@ services:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    env_file:
+      - ./banking/.env
     ports:
       - "${DB_PORT}:5432"
     volumes:
@@ -41,22 +46,41 @@ services:
     networks:
       - blueprint
 
-  migration:
+  banking-migration:
     build:
-      context: .
-      dockerfile: Dockerfile.migration
+      context: ./banking
+      dockerfile: ../Dockerfile.migration
     restart: no
     environment:
       GOOSE_DRIVER: ${GOOSE_DRIVER}
       GOOSE_DBSTRING: ${GOOSE_DBSTRING}
       GOOSE_TABLE: ${GOOSE_TABLE}
+      GOOSE_MIGRATION_DIR: "./"
+    env_file:
+      - ./banking/.env
     depends_on:
       psql_bp:
         condition: service_healthy
     networks:
       - blueprint
 
+  web:
+    build:
+      context: ./web
+      dockerfile: ../Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - banking-app
+    networks:
+      - blueprint
+
 volumes:
   psql_volume_bp:
+
 networks:
   blueprint:

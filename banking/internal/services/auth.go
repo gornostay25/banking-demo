@@ -178,7 +178,9 @@ func (s *AuthService) createAuthenticator() func(c *gin.Context) (any, error) {
 
 func (s *AuthService) createAuthorizator() func(c *gin.Context, data any) bool {
 	return func(c *gin.Context, data any) bool {
-		// We dont have roles
+		if data == nil {
+			return false
+		}
 		return true
 	}
 }

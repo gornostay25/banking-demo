@@ -46,3 +46,29 @@ For each substantial AI interaction (not every single autocompletion), add an en
 - Additional business logic and custom features were manually added to meet specific requirements
 - Final implementation includes pages for transactions, transfers, exchange, and main dashboard with navigation components
 
+## AI-3
+
+**Purpose:** Add minimal unit tests for banking backend APIs.
+
+**Tool & Model:** GPT-5.2 Codex
+
+**Prompt:** "Add minimal unit tests for banking backend for all api"
+
+**How the response was used:**
+- Added test helpers for DB setup, migrations, and test server
+- Implemented unit tests for health, auth, accounts, and transactions endpoints
+- Tests were added directly to the codebase with minimal edits afterward
+
+## AI-4
+
+**Purpose:** Fill in and improve README design/Q&A documentation.
+
+**Tool & Model:** GPT-5.2 (Cursor AI)
+
+**Prompt:** "Answer questions about project @README.md (Questions to Consider + Design decisions / Known limitations), then implement the plan; improve answer formatting; add scaling note about Docker and stateless JWT (gin-jwt) for horizontal scaling. Based on the backend implementation."
+
+**How the response was used:**
+- Updated `README.md` with concrete answers based on the backend implementation (DB transactions, `SELECT FOR UPDATE`, double-entry ledger, decimals, indexing, reconciliation approach, scaling recommendations).
+- Reformatted answers into short structured bullet lists for readability.
+- Extended scaling section with a deployment note: containerize with Docker and horizontally scale stateless JWT-based API instances behind a load balancer.
+

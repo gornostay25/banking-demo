@@ -37,7 +37,7 @@ dist/
 .air.toml
 Makefile
 docker-compose.yml
-Dockerfile.migration
+Dockerfile*
 
 # Documentation
 README.md

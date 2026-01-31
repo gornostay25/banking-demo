@@ -1,40 +1,47 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { isServer, QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import {
+  isServer,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import type * as React from "react";
+import { AuthProvider } from "@/contexts/auth-context";
 
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
+        retry: false,
+      },
+      mutations: {
+        retry: false,
       },
     },
-  })
+  });
 }
 
-let browserQueryClient: QueryClient | undefined
+let browserQueryClient: QueryClient | undefined;
 
 function getQueryClient() {
   if (isServer) {
-    return makeQueryClient()
+    return makeQueryClient();
   }
 
   if (!browserQueryClient) {
-    browserQueryClient = makeQueryClient()
+    browserQueryClient = makeQueryClient();
   }
 
-  return browserQueryClient
+  return browserQueryClient;
 }
 
-export default function Providers({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const queryClient = getQueryClient()
+export default function Providers({ children }: { children: React.ReactNode }) {
+  const queryClient = getQueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
 }
