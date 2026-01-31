@@ -246,17 +246,6 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh token",
-                "parameters": [
-                    {
-                        "description": "Refresh token request",
-                        "name": "refresh_token",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/services.RefreshRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -650,18 +639,6 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "password"
-                }
-            }
-        },
-        "services.RefreshRequest": {
-            "type": "object",
-            "required": [
-                "refresh_token"
-            ],
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "DcwAT..."
                 }
             }
         },

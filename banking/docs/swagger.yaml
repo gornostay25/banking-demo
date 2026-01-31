@@ -103,14 +103,6 @@ definitions:
     - email
     - password
     type: object
-  services.RefreshRequest:
-    properties:
-      refresh_token:
-        example: DcwAT...
-        type: string
-    required:
-    - refresh_token
-    type: object
   services.TokenPairResponse:
     properties:
       code:
@@ -358,13 +350,6 @@ paths:
       - application/json
       description: 'Refresh JWT access token using refresh token. Returns new access
         token and refresh token. Also sets HTTP-only cookies: `token` and `refresh_token`.'
-      parameters:
-      - description: Refresh token request
-        in: body
-        name: refresh_token
-        required: true
-        schema:
-          $ref: '#/definitions/services.RefreshRequest'
       produces:
       - application/json
       responses:
