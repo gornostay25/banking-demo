@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
@@ -57,6 +57,7 @@ const formatBalance = (amount: string, currency: "USD" | "EUR") => {
 
 export default function TransferPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -86,6 +87,7 @@ export default function TransferPage() {
   const transferMutation = useMutation({
     mutationFn: transfer,
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       router.push(`/transactions?highlight=${data.id}`);
     },
   });

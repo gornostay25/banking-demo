@@ -1,10 +1,11 @@
 //go:build integration
 
-package database_test
+package database
 
 import (
 	"context"
 	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -51,6 +52,17 @@ func mustStartPostgresContainer() (func(context.Context, ...testcontainers.Termi
 
 	host = dbHost
 	port = dbPort.Port()
+	schema = "public"
+
+	_ = os.Setenv("DB_HOST", host)
+	_ = os.Setenv("DB_PORT", port)
+	_ = os.Setenv("DB_DATABASE", database)
+	_ = os.Setenv("DB_USERNAME", username)
+	_ = os.Setenv("DB_PASSWORD", password)
+	_ = os.Setenv("DB_SCHEMA", schema)
+	_ = os.Setenv("PORT", "8080")
+
+	ResetInstance()
 
 	return dbContainer.Terminate, err
 }

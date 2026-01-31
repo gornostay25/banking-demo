@@ -3,11 +3,12 @@
 package server_test
 
 import (
-	"banking/internal/testhelpers"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"banking/internal/testhelpers"
 )
 
 func TestHealth(t *testing.T) {

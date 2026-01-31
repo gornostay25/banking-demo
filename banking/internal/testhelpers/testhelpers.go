@@ -24,6 +24,26 @@ import (
 	"github.com/uptrace/bun"
 )
 
+import _ "unsafe"
+
+//go:linkname dbDatabase banking/internal/database.database
+var dbDatabase string
+
+//go:linkname dbPassword banking/internal/database.password
+var dbPassword string
+
+//go:linkname dbUsername banking/internal/database.username
+var dbUsername string
+
+//go:linkname dbHost banking/internal/database.host
+var dbHost string
+
+//go:linkname dbPort banking/internal/database.port
+var dbPort string
+
+//go:linkname dbSchema banking/internal/database.schema
+var dbSchema string
+
 const (
 	initMigrationFile     = "20260129170243_init.sql"
 	testDataMigrationFile = "20260130145301_test_data.sql"
@@ -78,27 +98,34 @@ func SetupTestDB() (*bun.DB, func() error, error) {
 			return
 		}
 
-		dbHost, err := dbContainer.Host(ctx)
+		host, err := dbContainer.Host(ctx)
 		if err != nil {
 			_ = dbContainer.Terminate(ctx)
 			setupErr = fmt.Errorf("failed to get container host: %w", err)
 			return
 		}
 
-		dbPort, err := dbContainer.MappedPort(ctx, "5432/tcp")
+		port, err := dbContainer.MappedPort(ctx, "5432/tcp")
 		if err != nil {
 			_ = dbContainer.Terminate(ctx)
 			setupErr = fmt.Errorf("failed to get container port: %w", err)
 			return
 		}
 
-		_ = os.Setenv("DB_HOST", dbHost)
-		_ = os.Setenv("DB_PORT", dbPort.Port())
+		_ = os.Setenv("DB_HOST", host)
+		_ = os.Setenv("DB_PORT", port.Port())
 		_ = os.Setenv("DB_DATABASE", dbName)
 		_ = os.Setenv("DB_USERNAME", dbUser)
 		_ = os.Setenv("DB_PASSWORD", dbPwd)
 		_ = os.Setenv("DB_SCHEMA", "public")
 		_ = os.Setenv("PORT", "8080")
+
+		dbHost = host
+		dbPort = port.Port()
+		dbDatabase = dbName
+		dbUsername = dbUser
+		dbPassword = dbPwd
+		dbSchema = "public"
 
 		// Reset database instance to ensure it uses new env variables
 		database.ResetInstance()
@@ -246,17 +273,17 @@ func splitSQLStatements(sqlText string) []string {
 	lines := strings.Split(sqlText, "\n")
 	var statements []string
 	var currentStmt strings.Builder
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		// Skip empty lines and comment-only lines
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		
+
 		currentStmt.WriteString(line)
 		currentStmt.WriteString("\n")
-		
+
 		// Check if line ends with semicolon (statement complete)
 		if strings.HasSuffix(strings.TrimSpace(line), ";") {
 			stmt := strings.TrimSpace(currentStmt.String())
@@ -266,7 +293,7 @@ func splitSQLStatements(sqlText string) []string {
 			currentStmt.Reset()
 		}
 	}
-	
+
 	// Handle any remaining statement without trailing semicolon
 	if currentStmt.Len() > 0 {
 		stmt := strings.TrimSpace(currentStmt.String())
@@ -274,6 +301,6 @@ func splitSQLStatements(sqlText string) []string {
 			statements = append(statements, stmt)
 		}
 	}
-	
+
 	return statements
 }

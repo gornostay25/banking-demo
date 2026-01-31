@@ -36,10 +36,6 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required" example:"password"`
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required" example:"DcwAT..."`
-}
-
 type UserResponse struct {
 	ID        string    `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Email     string    `json:"email" example:"user1@test.com"`
@@ -97,8 +93,10 @@ func (s *AuthService) JWTInitParams() *jwt.GinJWTMiddleware {
 
 		RefreshTokenCookieName: "refresh_token",
 		CookieName:             "token",
+		SecureCookie:           true,
 		SendCookie:             true,
 		CookieHTTPOnly:         true,
+		CookieSameSite:         http.SameSiteNoneMode,
 		CookieMaxAge:           time.Hour * 24,
 
 		PayloadFunc:     s.createPayloadFunc(),
@@ -179,6 +177,7 @@ func (s *AuthService) createAuthenticator() func(c *gin.Context) (any, error) {
 func (s *AuthService) createAuthorizator() func(c *gin.Context, data any) bool {
 	return func(c *gin.Context, data any) bool {
 		if data == nil {
+			// fire 401
 			return false
 		}
 		return true

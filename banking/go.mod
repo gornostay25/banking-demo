@@ -1,6 +1,6 @@
 module banking
 
-go 1.25.6
+go 1.25
 
 require (
 	github.com/appleboy/gin-jwt/v3 v3.4.1

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -90,6 +90,7 @@ const calculateConvertedAmount = (
 
 export default function ExchangePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
@@ -134,6 +135,7 @@ export default function ExchangePage() {
   const exchangeMutation = useMutation({
     mutationFn: exchange,
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       router.push(`/transactions?highlight=${data.id}`);
     },
   });

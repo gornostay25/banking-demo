@@ -53,9 +53,7 @@ func TestAuthRefreshSuccess(t *testing.T) {
 	_, refreshToken := loginAndGetTokens(t, handler, "user1@test.com", "password")
 	require.NotEmpty(t, refreshToken)
 
-	body := []byte(`{"refresh_token":"` + refreshToken + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
 	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: refreshToken})
 
 	rec := httptest.NewRecorder()
@@ -77,9 +75,7 @@ func TestAuthRefreshInvalidToken(t *testing.T) {
 	testhelpers.ResetTestData(t)
 	handler := testhelpers.SetupTestServer(t)
 
-	body := []byte(`{"refresh_token":"bad-token"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
 	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "bad-token"})
 
 	rec := httptest.NewRecorder()

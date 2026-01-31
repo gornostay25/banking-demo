@@ -26,7 +26,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"}, // Add your frontend URL
+		AllowOrigins:     []string{"http://localhost:3000", "https://banking-demo.gornostay25.dev"}, // Add your frontend URL
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders:     []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true, // Enable cookies/auth
@@ -74,7 +74,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// Swagger documentation
 	r.GET("/swagger/*any", func(ctx *gin.Context) {
 		// Redirect to swagger index.html
-		if ctx.Request.URL.Path == "/swagger" {
+		if ctx.Request.URL.Path == "/swagger" || ctx.Request.URL.Path == "/swagger/" {
 			ctx.Redirect(http.StatusMovedPermanently, "/swagger/index.html")
 			return
 		}
@@ -105,7 +105,6 @@ func (s *Server) loginHandler(authMiddleware *jwt.GinJWTMiddleware) gin.HandlerF
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param refresh_token body services.RefreshRequest true "Refresh token request"
 // @Success 200 {object} services.TokenPairResponse
 // @header 200 {string} Set-Cookie "Sets two HTTP-only cookies: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... and refresh_token=Jk1WWhw-eo6NWpDH5w3p4ky69gjrCZeuRfG5_2rFsvE="
 // @Failure 401 {object} services.ErrorResponse
